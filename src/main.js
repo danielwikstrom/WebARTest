@@ -1,11 +1,15 @@
 // WebXR Gift Card - Main Entry Point
 // Simplified: Basic camera feed only (marker tracking removed for debugging)
+// Using Three.js WebGLRenderer like WebXRGaussian does
+
+import * as THREE from 'three';
 
 const canvas = document.getElementById('xr-canvas');
 let xrSession = null;
 let xrButton = null; // Will be used for manual trigger if needed
 let referenceSpace = null;
 let xrLayer = null; // Store the XR layer for framebuffer binding
+let renderer = null; // Three.js renderer (like WebXRGaussian uses)
 
 // Debug overlay setup
 const debugContent = document.getElementById('debug-content');
@@ -133,88 +137,43 @@ async function requestARSession() {
     debugLog('AR session started successfully!', 'success');
     updateDebugStatus();
 
-    // Set up canvas for WebXR
-    debugLog('Getting WebGL context...', 'info');
-    let gl = canvas.getContext('webgl', { 
-      xrCompatible: true,
-      antialias: true,
-      alpha: true
+    // Set up Three.js WebGLRenderer (like WebXRGaussian does)
+    // This is the key difference - Three.js handles XR session properly
+    debugLog('Creating Three.js WebGLRenderer...', 'info');
+    renderer = new THREE.WebGLRenderer({ 
+      canvas: canvas,
+      antialias: false, // Like WebXRGaussian
+      alpha: true,
+      powerPreference: 'high-performance'
     });
-
-    if (!gl) {
-      debugLog('Failed to get WebGL context', 'error');
-      throw new Error('Failed to get WebGL context');
-    }
-
-    debugLog(`WebGL context created. Canvas: ${canvas.width}x${canvas.height}`, 'success');
     
-    // Ensure WebGL context is XR compatible (might be needed on some browsers)
-    try {
-      if (gl.makeXRCompatible) {
-        debugLog('Making WebGL context XR compatible...', 'info');
-        await gl.makeXRCompatible();
-        debugLog('WebGL context is XR compatible', 'success');
-      }
-    } catch (error) {
-      debugLog(`makeXRCompatible warning: ${error.message}`, 'warning');
-      // Continue anyway - context might already be compatible
-    }
-
-    // Make the WebGL context the base layer for the XR session
-    debugLog('Creating XRWebGLLayer...', 'info');
-    try {
-      xrLayer = new XRWebGLLayer(xrSession, gl);
-      debugLog('XRWebGLLayer created successfully', 'success');
-    } catch (error) {
-      debugLog(`Error creating XRWebGLLayer: ${error.message}`, 'error');
-      throw error;
-    }
+    // Enable XR on the renderer (this is crucial!)
+    renderer.xr.enabled = true;
+    renderer.xr.setSession(xrSession);
     
-    debugLog('Updating render state with baseLayer...', 'info');
-    await xrSession.updateRenderState({
-      baseLayer: xrLayer
-    });
-    debugLog('Render state updated', 'success');
+    debugLog('Three.js renderer created and XR enabled', 'success');
+    debugLog(`Renderer size: ${renderer.getSize(new THREE.Vector2()).x}x${renderer.getSize(new THREE.Vector2()).y}`, 'info');
     
-    debugLog(`XRWebGLLayer created. Antialias: ${xrLayer.antialias}, IgnoreDepthValues: ${xrLayer.ignoreDepthValues}`, 'info');
-    debugLog(`XRWebGLLayer framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
-    debugLog(`XRWebGLLayer framebuffer object: ${xrLayer.framebuffer}`, xrLayer.framebuffer ? 'success' : 'warning');
-    
-    if (!xrLayer.framebuffer) {
-      debugLog('⚠️ Framebuffer is null - this is normal on iOS WebXRViewer', 'warning');
-      debugLog('The camera feed should still work - XRWebGLLayer handles it', 'info');
-    }
-
-    // Set canvas size - on iOS WebXRViewer, we might need to use screen size
-    // instead of the small framebuffer size
+    // Set renderer size to match screen
     const screenWidth = window.innerWidth || canvas.offsetWidth;
     const screenHeight = window.innerHeight || canvas.offsetHeight;
+    renderer.setSize(screenWidth, screenHeight);
+    debugLog(`Renderer resized to: ${screenWidth}x${screenHeight}`, 'info');
     
-    // Try setting canvas to screen size first (iOS WebXRViewer might need this)
-    canvas.width = screenWidth;
-    canvas.height = screenHeight;
-    debugLog(`Canvas set to screen size: ${canvas.width}x${canvas.height}`, 'info');
-    debugLog(`GL drawingBuffer: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
-    debugLog(`Screen dimensions: ${screenWidth}x${screenHeight}`, 'info');
+    // Get the WebGL context from Three.js renderer
+    const gl = renderer.getContext();
+    debugLog(`WebGL context from Three.js renderer obtained`, 'success');
     
-    // Try to get the actual render state to see the real dimensions
-    const renderState = xrSession.renderState;
-    if (renderState && renderState.baseLayer) {
-      debugLog(`BaseLayer framebuffer: ${renderState.baseLayer.framebufferWidth}x${renderState.baseLayer.framebufferHeight}`, 'info');
-    }
+    // The XR session is now managed by Three.js renderer
+    // Three.js automatically creates the XRWebGLLayer and handles camera feed
+    debugLog('Three.js is managing XR session - camera feed should work', 'info');
     
-    // On iOS WebXRViewer, the framebuffer might be null, so we need to
-    // ensure the canvas is the right size for the camera feed
-    debugLog('Canvas size set - camera feed should match screen', 'info');
-    
+    // Three.js renderer handles canvas sizing automatically
     // Verify canvas is visible
     const canvasStyle = window.getComputedStyle(canvas);
     debugLog(`Canvas display: ${canvasStyle.display}, visibility: ${canvasStyle.visibility}`, 'info');
     debugLog(`Canvas position: ${canvasStyle.position}, z-index: ${canvasStyle.zIndex}`, 'info');
     debugLog(`Canvas dimensions: ${canvas.offsetWidth}x${canvas.offsetHeight}`, 'info');
-    
-    // On iOS WebXRViewer, we might need to wait for the session to fully initialize
-    debugLog('Waiting for session to fully initialize...', 'info');
 
     // Get reference space for tracking
     debugLog('Requesting reference space...', 'info');
@@ -225,9 +184,31 @@ async function requestARSession() {
     // Handle session end
     xrSession.addEventListener('end', handleSessionEnd);
 
-    // Start the render loop - just for camera feed
-    debugLog('Starting render loop for camera feed...', 'info');
-    xrSession.requestAnimationFrame(onXRFrame);
+    // Start the render loop using Three.js renderer
+    // Three.js handles the XR frame loop automatically
+    debugLog('Starting Three.js XR render loop...', 'info');
+    
+    // Create a simple scene (needed for Three.js to render)
+    const scene = new THREE.Scene();
+    const camera = new THREE.PerspectiveCamera(75, screenWidth / screenHeight, 0.1, 1000);
+    scene.add(camera);
+    
+    // Start the render loop
+    renderer.setAnimationLoop(() => {
+      // Three.js automatically handles XR rendering and camera feed
+      renderer.render(scene, camera);
+      frameCount++;
+      
+      if (frameCount === 1) {
+        debugLog('✅ Three.js render loop started', 'success');
+        debugLog('Camera feed should be visible via Three.js XR', 'info');
+      }
+      
+      // Update debug status periodically
+      if (frameCount % 60 === 0) {
+        updateDebugStatus();
+      }
+    });
 
     debugLog('WebXR session initialized - camera feed should be visible', 'success');
     debugLog('If you see black screen, the XRWebGLLayer may not be rendering', 'warning');
@@ -248,122 +229,22 @@ async function requestARSession() {
   }
 }
 
-// Handle XR frame - Simple camera feed only
-function onXRFrame(time, frame) {
-  if (!xrSession || !referenceSpace) {
-    if (frameCount === 0) {
-      debugLog('Render loop started but session/referenceSpace missing', 'error');
-    }
-    return;
-  }
-
-  frameCount++;
-  
-  // Update debug info periodically
-  if (frameCount === 1) {
-    debugLog('✅ Render loop running! Frame 1 processed', 'success');
-    debugLog('Camera feed should be visible now', 'info');
-    updateDebugStatus();
-  } else if (frameCount % 60 === 0) {
-    // Update status every 60 frames (~1 second at 60fps)
-    updateDebugStatus();
-  }
-
-  // Continue the render loop
-  xrSession.requestAnimationFrame(onXRFrame);
-
-  // Get the WebGL context
-  const gl = canvas.getContext('webgl');
-  if (!gl) {
-    if (frameCount === 1) {
-      debugLog('Failed to get WebGL context in render loop', 'error');
-    }
-    return;
-  }
-
-  // IMPORTANT: On iOS WebXRViewer, the framebuffer might be null
-  // The camera feed should still work without explicitly binding it
-  // The XRWebGLLayer handles the camera feed automatically
-  
-  if (xrLayer) {
-    if (xrLayer.framebuffer) {
-      // Framebuffer is available - bind it (standard WebXR behavior)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer);
-      gl.viewport(0, 0, xrLayer.framebufferWidth, xrLayer.framebufferHeight);
-      
-      if (frameCount === 1) {
-        debugLog(`✅ Bound XR framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'success');
-      }
-    } else {
-      // Framebuffer is null (iOS WebXRViewer behavior)
-      // Bind to default framebuffer (null/0)
-      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-      
-      // Set viewport to canvas size (not drawingBuffer size)
-      // On iOS, the canvas size should match the screen
-      const viewportWidth = canvas.width || gl.drawingBufferWidth;
-      const viewportHeight = canvas.height || gl.drawingBufferHeight;
-      gl.viewport(0, 0, viewportWidth, viewportHeight);
-      
-      if (frameCount === 1) {
-        debugLog('⚠️ Framebuffer is null (iOS WebXRViewer) - using default framebuffer', 'warning');
-        debugLog(`Viewport set to canvas size: ${viewportWidth}x${viewportHeight}`, 'info');
-        debugLog('Camera feed should be handled by XRWebGLLayer automatically', 'info');
-        debugLog('If still black, iOS WebXRViewer might need different approach', 'warning');
-      }
-    }
-  } else {
-    if (frameCount === 1) {
-      debugLog('❌ XR layer not available', 'error');
-    }
-  }
-
-  // Force debug overlay to stay visible (in case it gets hidden)
-  if (frameCount % 30 === 0) {
-    forceDebugVisible();
-  }
-
-  // In WebXR immersive AR, the camera feed should be automatically composited
-  // by the XRWebGLLayer. However, on some platforms (like iOS WebXRViewer),
-  // we might need to do a minimal render operation to trigger the camera feed.
-  
-  // On iOS WebXRViewer, the camera feed should appear automatically
-  // Don't clear or render anything - let the XRWebGLLayer handle it
-  // Any clearing might hide the camera feed
-  
-  // Just ensure we're ready - the camera feed should be composited by the browser
-  if (frameCount === 1) {
-    debugLog('First frame - camera feed should be visible if XRWebGLLayer is working', 'info');
-    debugLog('No clearing performed - letting XRWebGLLayer handle camera', 'info');
-  }
-  
-  // Note: If camera is still black, it might be:
-  // 1. iOS WebXRViewer specific behavior
-  // 2. Camera permissions issue
-  // 3. XRWebGLLayer not properly initialized
-  // 4. Browser needs different rendering approach
-
-  // Get the viewer pose for this frame (just to verify tracking is working)
-  const viewerPose = frame.getViewerPose(referenceSpace);
-  
-  if (viewerPose) {
-    // Session is active and tracking
-    if (frameCount === 1) {
-      debugLog('✅ Viewer pose available - tracking active', 'success');
-      debugLog('If camera is black, check XRWebGLLayer setup', 'warning');
-    }
-  } else {
-    if (frameCount === 1) {
-      debugLog('⚠️ Viewer pose not available on first frame', 'warning');
-    }
-  }
-}
+// Three.js handles the render loop automatically via setAnimationLoop
+// No need for manual onXRFrame function - Three.js does it all!
 
 // Handle session end
 function handleSessionEnd() {
   debugLog('AR session ended', 'warning');
+  
+  // Stop Three.js animation loop
+  if (renderer) {
+    renderer.setAnimationLoop(null);
+    debugLog('Three.js animation loop stopped', 'info');
+  }
+  
   xrSession = null;
   referenceSpace = null;
+  renderer = null;
   updateDebugStatus();
   
   // Reset canvas
