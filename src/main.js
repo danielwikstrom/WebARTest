@@ -284,14 +284,25 @@ function onXRFrame(time, frame) {
   }
 
   // In WebXR immersive AR, the camera feed should be automatically composited
-  // by the XRWebGLLayer. We don't need to clear or render anything - the
-  // camera feed is handled by the browser/WebXR runtime.
+  // by the XRWebGLLayer. However, on some platforms (like iOS WebXRViewer),
+  // we might need to do a minimal render operation to trigger the camera feed.
   
-  // However, if the camera feed is black, it might be because:
-  // 1. The framebuffer isn't being bound correctly
-  // 2. The viewport isn't set correctly
-  // 3. The XRWebGLLayer isn't properly configured
-  // 4. The browser needs explicit rendering commands
+  // Try a minimal clear with alpha to see if it helps trigger camera display
+  // Use a very subtle clear that shouldn't hide the camera
+  if (frameCount === 1) {
+    // On first frame, try a minimal operation to trigger rendering
+    gl.clearColor(0, 0, 0, 0);
+    gl.colorMask(true, true, true, false); // Don't write to alpha channel
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.colorMask(true, true, true, true); // Restore color mask
+    debugLog('Performed minimal clear to trigger camera feed', 'info');
+  }
+  
+  // Note: If camera is still black, it might be:
+  // 1. iOS WebXRViewer specific behavior
+  // 2. Camera permissions issue
+  // 3. XRWebGLLayer not properly initialized
+  // 4. Browser needs different rendering approach
 
   // Get the viewer pose for this frame (just to verify tracking is working)
   const viewerPose = frame.getViewerPose(referenceSpace);
