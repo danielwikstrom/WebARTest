@@ -52,11 +52,31 @@ function updateDebugStatus() {
     Canvas: ${status.canvasSize}`;
 }
 
+// Force debug overlay to stay visible
+function forceDebugVisible() {
+  const overlay = document.getElementById('debug-overlay');
+  if (overlay) {
+    overlay.style.display = 'flex';
+    overlay.style.visibility = 'visible';
+    overlay.style.opacity = '1';
+    overlay.style.zIndex = '2147483647';
+  }
+}
+
+// Periodically check and force debug overlay visibility
+setInterval(() => {
+  forceDebugVisible();
+}, 100);
+
 // Toggle debug overlay
 debugToggle.addEventListener('click', () => {
   debugVisible = !debugVisible;
   const overlay = document.getElementById('debug-overlay');
-  overlay.style.display = debugVisible ? 'block' : 'none';
+  if (debugVisible) {
+    forceDebugVisible();
+  } else {
+    overlay.style.display = 'none';
+  }
   debugToggle.textContent = debugVisible ? 'Hide Debug' : 'Show Debug';
 });
 
@@ -219,16 +239,29 @@ function onXRFrame(time, frame) {
     
     if (frameCount === 1) {
       debugLog(`Bound XR framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
+      debugLog(`Framebuffer object: ${xrLayer.framebuffer}`, 'info');
     }
   } else {
     if (frameCount === 1) {
       debugLog('⚠️ XR layer or framebuffer not available', 'warning');
+      debugLog(`xrLayer exists: ${!!xrLayer}, framebuffer exists: ${xrLayer ? !!xrLayer.framebuffer : 'N/A'}`, 'warning');
     }
+  }
+
+  // Force debug overlay to stay visible (in case it gets hidden)
+  if (frameCount % 30 === 0) {
+    forceDebugVisible();
   }
 
   // In WebXR immersive AR, the camera feed should be automatically composited
   // by the XRWebGLLayer. We don't need to clear or render anything - the
   // camera feed is handled by the browser/WebXR runtime.
+  
+  // However, if the camera feed is black, it might be because:
+  // 1. The framebuffer isn't being bound correctly
+  // 2. The viewport isn't set correctly
+  // 3. The XRWebGLLayer isn't properly configured
+  // 4. The browser needs explicit rendering commands
 
   // Get the viewer pose for this frame (just to verify tracking is working)
   const viewerPose = frame.getViewerPose(referenceSpace);
