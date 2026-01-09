@@ -135,7 +135,7 @@ async function requestARSession() {
 
     // Set up canvas for WebXR
     debugLog('Getting WebGL context...', 'info');
-    const gl = canvas.getContext('webgl', { 
+    let gl = canvas.getContext('webgl', { 
       xrCompatible: true,
       antialias: true,
       alpha: true
@@ -147,13 +147,34 @@ async function requestARSession() {
     }
 
     debugLog(`WebGL context created. Canvas: ${canvas.width}x${canvas.height}`, 'success');
+    
+    // Ensure WebGL context is XR compatible (might be needed on some browsers)
+    try {
+      if (gl.makeXRCompatible) {
+        debugLog('Making WebGL context XR compatible...', 'info');
+        await gl.makeXRCompatible();
+        debugLog('WebGL context is XR compatible', 'success');
+      }
+    } catch (error) {
+      debugLog(`makeXRCompatible warning: ${error.message}`, 'warning');
+      // Continue anyway - context might already be compatible
+    }
 
     // Make the WebGL context the base layer for the XR session
     debugLog('Creating XRWebGLLayer...', 'info');
-    xrLayer = new XRWebGLLayer(xrSession, gl);
+    try {
+      xrLayer = new XRWebGLLayer(xrSession, gl);
+      debugLog('XRWebGLLayer created successfully', 'success');
+    } catch (error) {
+      debugLog(`Error creating XRWebGLLayer: ${error.message}`, 'error');
+      throw error;
+    }
+    
+    debugLog('Updating render state with baseLayer...', 'info');
     await xrSession.updateRenderState({
       baseLayer: xrLayer
     });
+    debugLog('Render state updated', 'success');
     
     debugLog(`XRWebGLLayer created. Antialias: ${xrLayer.antialias}, IgnoreDepthValues: ${xrLayer.ignoreDepthValues}`, 'info');
     debugLog(`XRWebGLLayer framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
@@ -210,6 +231,13 @@ async function requestARSession() {
 
     debugLog('WebXR session initialized - camera feed should be visible', 'success');
     debugLog('If you see black screen, the XRWebGLLayer may not be rendering', 'warning');
+    
+    // iOS WebXRViewer specific note
+    if (navigator.userAgent.includes('WebXRViewer')) {
+      debugLog('⚠️ iOS WebXRViewer detected - camera feed support may be limited', 'warning');
+      debugLog('Consider testing on Android Chrome for full WebXR support', 'info');
+    }
+    
     return true;
 
   } catch (error) {
