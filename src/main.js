@@ -164,18 +164,27 @@ async function requestARSession() {
       debugLog('The camera feed should still work - XRWebGLLayer handles it', 'info');
     }
 
-    // Set canvas size to match the XR viewport
-    // Note: On iOS, the drawingBufferWidth/Height might be small initially
-    canvas.width = gl.drawingBufferWidth;
-    canvas.height = gl.drawingBufferHeight;
-    debugLog(`Canvas resized to: ${canvas.width}x${canvas.height}`, 'info');
+    // Set canvas size - on iOS WebXRViewer, we might need to use screen size
+    // instead of the small framebuffer size
+    const screenWidth = window.innerWidth || canvas.offsetWidth;
+    const screenHeight = window.innerHeight || canvas.offsetHeight;
+    
+    // Try setting canvas to screen size first (iOS WebXRViewer might need this)
+    canvas.width = screenWidth;
+    canvas.height = screenHeight;
+    debugLog(`Canvas set to screen size: ${canvas.width}x${canvas.height}`, 'info');
     debugLog(`GL drawingBuffer: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
+    debugLog(`Screen dimensions: ${screenWidth}x${screenHeight}`, 'info');
     
     // Try to get the actual render state to see the real dimensions
     const renderState = xrSession.renderState;
     if (renderState && renderState.baseLayer) {
       debugLog(`BaseLayer framebuffer: ${renderState.baseLayer.framebufferWidth}x${renderState.baseLayer.framebufferHeight}`, 'info');
     }
+    
+    // On iOS WebXRViewer, the framebuffer might be null, so we need to
+    // ensure the canvas is the right size for the camera feed
+    debugLog('Canvas size set - camera feed should match screen', 'info');
     
     // Verify canvas is visible
     const canvasStyle = window.getComputedStyle(canvas);
@@ -259,17 +268,20 @@ function onXRFrame(time, frame) {
       }
     } else {
       // Framebuffer is null (iOS WebXRViewer behavior)
-      // Don't bind anything - let the XRWebGLLayer handle rendering
-      // Bind to default framebuffer (0) instead
+      // Bind to default framebuffer (null/0)
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
       
-      // Set viewport to canvas size
-      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      // Set viewport to canvas size (not drawingBuffer size)
+      // On iOS, the canvas size should match the screen
+      const viewportWidth = canvas.width || gl.drawingBufferWidth;
+      const viewportHeight = canvas.height || gl.drawingBufferHeight;
+      gl.viewport(0, 0, viewportWidth, viewportHeight);
       
       if (frameCount === 1) {
         debugLog('⚠️ Framebuffer is null (iOS WebXRViewer) - using default framebuffer', 'warning');
-        debugLog(`Viewport set to: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
+        debugLog(`Viewport set to canvas size: ${viewportWidth}x${viewportHeight}`, 'info');
         debugLog('Camera feed should be handled by XRWebGLLayer automatically', 'info');
+        debugLog('If still black, iOS WebXRViewer might need different approach', 'warning');
       }
     }
   } else {
@@ -287,15 +299,14 @@ function onXRFrame(time, frame) {
   // by the XRWebGLLayer. However, on some platforms (like iOS WebXRViewer),
   // we might need to do a minimal render operation to trigger the camera feed.
   
-  // Try a minimal clear with alpha to see if it helps trigger camera display
-  // Use a very subtle clear that shouldn't hide the camera
+  // On iOS WebXRViewer, the camera feed should appear automatically
+  // Don't clear or render anything - let the XRWebGLLayer handle it
+  // Any clearing might hide the camera feed
+  
+  // Just ensure we're ready - the camera feed should be composited by the browser
   if (frameCount === 1) {
-    // On first frame, try a minimal operation to trigger rendering
-    gl.clearColor(0, 0, 0, 0);
-    gl.colorMask(true, true, true, false); // Don't write to alpha channel
-    gl.clear(gl.COLOR_BUFFER_BIT);
-    gl.colorMask(true, true, true, true); // Restore color mask
-    debugLog('Performed minimal clear to trigger camera feed', 'info');
+    debugLog('First frame - camera feed should be visible if XRWebGLLayer is working', 'info');
+    debugLog('No clearing performed - letting XRWebGLLayer handle camera', 'info');
   }
   
   // Note: If camera is still black, it might be:
