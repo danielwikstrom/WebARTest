@@ -40,7 +40,8 @@ function updateDebugStatus() {
     referenceSpace: !!referenceSpace,
     canvas: !!canvas,
     gl: !!canvas?.getContext('webgl'),
-    frames: frameCount
+    frames: frameCount,
+    canvasSize: canvas ? `${canvas.width}x${canvas.height}` : 'N/A'
   };
   
   const statusDiv = document.getElementById('debug-status');
@@ -52,7 +53,12 @@ function updateDebugStatus() {
   }
   
   const statusEl = document.getElementById('debug-status');
-  statusEl.innerHTML = `<strong>Status:</strong> WebXR: ${status.webxr ? '✅' : '❌'} | Session: ${status.session ? '✅' : '❌'} | GL: ${status.gl ? '✅' : '❌'} | Frames: ${frameCount}`;
+  statusEl.innerHTML = `<strong>Status:</strong><br>
+    WebXR: ${status.webxr ? '✅' : '❌'} | 
+    Session: ${status.session ? '✅' : '❌'} | 
+    GL: ${status.gl ? '✅' : '❌'}<br>
+    Frames: ${frameCount} | 
+    Canvas: ${status.canvasSize}`;
 }
 
 // Toggle debug overlay
@@ -211,9 +217,15 @@ function onXRFrame(time, frame) {
   }
 
   frameCount++;
-  if (frameCount % 60 === 0) {
+  
+  // Update debug info periodically
+  if (frameCount === 1) {
+    debugLog('✅ Render loop running! Frame 1 processed', 'success');
+    updateDebugStatus();
+  } else if (frameCount % 60 === 0) {
     // Update status every 60 frames (~1 second at 60fps)
     updateDebugStatus();
+    debugLog(`Frames processed: ${frameCount}`, 'info');
   }
 
   // Continue the render loop
@@ -228,15 +240,21 @@ function onXRFrame(time, frame) {
     return;
   }
 
-  // Clear the canvas
-  gl.clearColor(0, 0, 0, 0);
-  gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // IMPORTANT: In WebXR immersive AR, the XRWebGLLayer automatically displays
+  // the camera feed. We should NOT clear the canvas as it will hide the camera.
+  // Only clear if we're rendering custom content on top.
+  // For now, we'll skip clearing to see the camera feed.
+  // gl.clearColor(0, 0, 0, 0);
+  // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
 
   // Get the viewer pose for this frame
   const viewerPose = frame.getViewerPose(referenceSpace);
   
   if (viewerPose) {
     // Session is active and tracking
+    if (frameCount === 1) {
+      debugLog('✅ Viewer pose available - camera should be visible', 'success');
+    }
     
     // Step 5: Update marker tracking - check if marker is detected
     const markerPose = updateMarkerTracking(frame, referenceSpace);
@@ -256,7 +274,7 @@ function onXRFrame(time, frame) {
     // In Step 6, we'll render the video/animation here using the markerPose
   } else {
     if (frameCount === 1) {
-      debugLog('Viewer pose not available', 'warning');
+      debugLog('⚠️ Viewer pose not available on first frame', 'warning');
     }
   }
 }
