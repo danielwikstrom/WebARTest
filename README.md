@@ -133,24 +133,36 @@ For best tracking results, your marker image should:
 
 **Git LFS / Vercel Deployment Issues:**
 If you see "Git LFS pointer file" errors in production:
+
 1. **Set up Git LFS token in Vercel:**
    - Go to Vercel project settings → Environment Variables
-   - Add `GIT_LFS_TOKEN` with a GitHub Personal Access Token
+   - Add one of these environment variables with a GitHub Personal Access Token:
+     - `GIT_LFS_TOKEN` (preferred)
+     - `GITHUB_TOKEN`
+     - `VERCEL_GITHUB_TOKEN`
+     - `GITHUB_PERSONAL_ACCESS_TOKEN`
    - Token needs `repo` scope to access Git LFS files
    - Redeploy after adding the token
 
-2. **Verify Git LFS tracking:**
+2. **Automatic LFS Download:**
+   - The build script (`scripts/setup-lfs.js`) automatically downloads LFS files during build
+   - Check Vercel build logs for "Git LFS setup complete!" message
+   - If you see errors, verify the token has correct permissions
+
+3. **Verify Git LFS tracking:**
    ```bash
    git lfs ls-files  # Should show marker-image.jpg
    ```
 
-3. **Check Vercel build logs:**
-   - Look for Git LFS download messages
+4. **Check Vercel build logs:**
+   - Look for "Pulling Git LFS files..." message
    - Ensure files are downloaded before build completes
+   - If LFS pull fails, check token permissions
 
-4. **Alternative:** If Git LFS continues to cause issues, you can:
+5. **Alternative:** If Git LFS continues to cause issues, you can:
    - Upload marker-image.jpg directly to Vercel's file system
    - Or use a CDN/cloud storage and update the path in code
+   - Or remove the file from LFS tracking if it's small enough
 
 **Marker not tracking:**
 - Ensure physical dimensions match printed size
