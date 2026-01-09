@@ -5,6 +5,7 @@ const canvas = document.getElementById('xr-canvas');
 let xrSession = null;
 let xrButton = null; // Will be used for manual trigger if needed
 let referenceSpace = null;
+let xrLayer = null; // Store the XR layer for framebuffer binding
 
 // Debug overlay setup
 const debugContent = document.getElementById('debug-content');
@@ -129,19 +130,26 @@ async function requestARSession() {
 
     // Make the WebGL context the base layer for the XR session
     debugLog('Creating XRWebGLLayer...', 'info');
-    const xrLayer = new XRWebGLLayer(xrSession, gl);
+    xrLayer = new XRWebGLLayer(xrSession, gl);
     await xrSession.updateRenderState({
       baseLayer: xrLayer
     });
     
     debugLog(`XRWebGLLayer created. Antialias: ${xrLayer.antialias}, IgnoreDepthValues: ${xrLayer.ignoreDepthValues}`, 'info');
     debugLog(`XRWebGLLayer framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
+    debugLog(`XRWebGLLayer framebuffer object: ${xrLayer.framebuffer}`, 'info');
 
     // Set canvas size to match the XR viewport
     canvas.width = gl.drawingBufferWidth;
     canvas.height = gl.drawingBufferHeight;
     debugLog(`Canvas resized to: ${canvas.width}x${canvas.height}`, 'info');
     debugLog(`GL viewport should match: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
+    
+    // Verify canvas is visible
+    const canvasStyle = window.getComputedStyle(canvas);
+    debugLog(`Canvas display: ${canvasStyle.display}, visibility: ${canvasStyle.visibility}`, 'info');
+    debugLog(`Canvas position: ${canvasStyle.position}, z-index: ${canvasStyle.zIndex}`, 'info');
+    debugLog(`Canvas dimensions: ${canvas.offsetWidth}x${canvas.offsetHeight}`, 'info');
 
     // Get reference space for tracking
     debugLog('Requesting reference space...', 'info');
@@ -201,10 +209,26 @@ function onXRFrame(time, frame) {
     return;
   }
 
-  // IMPORTANT: In WebXR immersive AR, the XRWebGLLayer automatically displays
-  // the camera feed. We should NOT clear the canvas as it will hide the camera.
-  // The XRWebGLLayer handles rendering the camera feed automatically.
-  // Do NOT call gl.clear() here - it will hide the camera!
+  // IMPORTANT: Bind the XR layer's framebuffer to render to it
+  // This is required for the camera feed to display
+  if (xrLayer && xrLayer.framebuffer) {
+    gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer);
+    
+    // Set viewport to match the framebuffer size
+    gl.viewport(0, 0, xrLayer.framebufferWidth, xrLayer.framebufferHeight);
+    
+    if (frameCount === 1) {
+      debugLog(`Bound XR framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
+    }
+  } else {
+    if (frameCount === 1) {
+      debugLog('⚠️ XR layer or framebuffer not available', 'warning');
+    }
+  }
+
+  // In WebXR immersive AR, the camera feed should be automatically composited
+  // by the XRWebGLLayer. We don't need to clear or render anything - the
+  // camera feed is handled by the browser/WebXR runtime.
 
   // Get the viewer pose for this frame (just to verify tracking is working)
   const viewerPose = frame.getViewerPose(referenceSpace);
