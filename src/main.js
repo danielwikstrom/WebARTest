@@ -1,8 +1,17 @@
 // WebXR Gift Card - Main Entry Point
-// Simplified: Basic camera feed only (marker tracking removed for debugging)
+// Step 3: WebXR Session Initialization
+// Step 4: Marker Image Registration  
+// Step 5: Marker Detection and Tracking
 // Using Three.js WebGLRenderer like WebXRGaussian does
 
 import * as THREE from 'three';
+import { 
+  initializeMarkerTracking, 
+  getTrackableImage,
+  updateMarkerTracking,
+  onMarkerDetected,
+  isMarkerCurrentlyDetected
+} from './marker-tracker.js';
 
 const canvas = document.getElementById('xr-canvas');
 let xrSession = null;
@@ -11,10 +20,10 @@ let referenceSpace = null;
 let xrLayer = null; // Store the XR layer for framebuffer binding
 let renderer = null; // Three.js renderer (like WebXRGaussian uses)
 
-// Debug overlay setup
+// Debug overlay setup (hidden by default now that camera works)
 const debugContent = document.getElementById('debug-content');
 const debugToggle = document.getElementById('debug-toggle');
-let debugVisible = true;
+let debugVisible = false; // Hide debug by default
 let frameCount = 0;
 
 // Debug logging functions
@@ -72,6 +81,12 @@ setInterval(() => {
   forceDebugVisible();
 }, 100);
 
+// Hide debug overlay by default
+const debugOverlay = document.getElementById('debug-overlay');
+if (debugOverlay) {
+  debugOverlay.style.display = 'none';
+}
+
 // Toggle debug overlay
 debugToggle.addEventListener('click', () => {
   debugVisible = !debugVisible;
@@ -126,9 +141,10 @@ async function requestARSession() {
 
     debugLog('Requesting AR session (basic camera feed only)...', 'info');
 
-    // Request immersive AR session - simplified, no image tracking
+    // Request immersive AR session with image tracking
     const sessionInit = {
-      requiredFeatures: ['local'] // Required for AR
+      requiredFeatures: ['local'], // Required for AR
+      optionalFeatures: ['image-tracking'] // Image tracking for marker detection
     };
 
     debugLog('Calling navigator.xr.requestSession...', 'info');
@@ -187,6 +203,30 @@ async function requestARSession() {
     // Handle session end
     xrSession.addEventListener('end', handleSessionEnd);
 
+    // Initialize marker tracking (Step 4)
+    try {
+      debugLog('Initializing marker tracking...', 'info');
+      const trackedImage = await initializeMarkerTracking(xrSession);
+      if (trackedImage) {
+        debugLog('✅ Marker tracking initialized', 'success');
+        
+        // Set up marker detection callback (Step 5)
+        onMarkerDetected((pose) => {
+          debugLog('🎯 Marker detected! Ready for animation!', 'success');
+          // Animation will be triggered here in Step 6
+        });
+      } else {
+        debugLog('ℹ️ Marker image loaded but tracking not available on this platform', 'warning');
+        debugLog('ℹ️ This is normal on Mac/Desktop - will work on Android Chrome', 'warning');
+      }
+    } catch (error) {
+      // Only show error if it's not a platform limitation
+      if (!error.message.includes('expected on Mac/Desktop')) {
+        debugLog(`⚠️ Marker tracking initialization failed: ${error.message}`, 'error');
+      }
+      // Continue anyway - we can still test the AR session
+    }
+
     // Start the render loop using Three.js renderer
     // Three.js handles the XR frame loop automatically
     debugLog('Starting Three.js XR render loop...', 'info');
@@ -196,11 +236,26 @@ async function requestARSession() {
     const camera = new THREE.PerspectiveCamera(75, screenWidth / screenHeight, 0.1, 1000);
     scene.add(camera);
     
+    // Store scene and camera for later use (marker tracking, video rendering)
+    window.xrScene = scene;
+    window.xrCamera = camera;
+    
     // Start the render loop
-    renderer.setAnimationLoop(() => {
+    renderer.setAnimationLoop((time, frame) => {
       // Three.js automatically handles XR rendering and camera feed
       renderer.render(scene, camera);
       frameCount++;
+      
+      // Update marker tracking (Step 5)
+      if (xrSession && referenceSpace && frame) {
+        const markerPose = updateMarkerTracking(frame, referenceSpace);
+        
+        if (markerPose) {
+          // Marker is detected - we have its pose
+          // This will be used in Step 6 to position the video/animation
+          // For now, we just track it (logging happens in marker-tracker.js)
+        }
+      }
       
       if (frameCount === 1) {
         debugLog('✅ Three.js render loop started', 'success');
