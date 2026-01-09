@@ -29,25 +29,47 @@
       position: fixed;
       top: 0;
       left: 0;
+      z-index: 1;
     }
     #debug-overlay {
       position: fixed;
       top: 10px;
       left: 10px;
       right: 10px;
-      background: rgba(0, 0, 0, 0.9);
+      background: rgba(0, 0, 0, 0.95);
       color: #fff;
-      padding: 15px;
+      padding: 12px;
       border-radius: 8px;
       font-family: monospace;
-      font-size: 11px;
-      line-height: 1.5;
-      z-index: 9999;
-      max-height: 50vh;
-      overflow-y: auto;
+      font-size: 10px;
+      line-height: 1.4;
+      z-index: 2147483647;
+      max-height: 70vh;
       border: 2px solid #4CAF50;
       pointer-events: auto;
-      backdrop-filter: blur(5px);
+      backdrop-filter: blur(10px);
+      -webkit-overflow-scrolling: touch;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    #debug-content {
+      overflow-y: auto;
+      overflow-x: hidden;
+      -webkit-overflow-scrolling: touch;
+      flex: 1;
+      padding-right: 5px;
+    }
+    #debug-content::-webkit-scrollbar {
+      width: 6px;
+    }
+    #debug-content::-webkit-scrollbar-track {
+      background: rgba(255, 255, 255, 0.1);
+      border-radius: 3px;
+    }
+    #debug-content::-webkit-scrollbar-thumb {
+      background: #4CAF50;
+      border-radius: 3px;
     }
     #debug-overlay h3 {
       margin: 0 0 10px 0;
@@ -74,15 +96,16 @@
       position: fixed;
       bottom: 10px;
       right: 10px;
-      background: rgba(0, 0, 0, 0.8);
+      background: rgba(0, 0, 0, 0.9);
       color: #fff;
       border: 2px solid #4CAF50;
       padding: 8px 12px;
       border-radius: 8px;
       font-size: 11px;
-      z-index: 10000;
+      z-index: 2147483647;
       cursor: pointer;
       pointer-events: auto;
+      touch-action: manipulation;
     }
   </style>
 </head>
