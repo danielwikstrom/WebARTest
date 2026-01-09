@@ -143,9 +143,12 @@ async function requestARSession() {
     renderer = new THREE.WebGLRenderer({ 
       canvas: canvas,
       antialias: false, // Like WebXRGaussian
-      alpha: true,
+      alpha: true, // Transparent background so camera shows through
       powerPreference: 'high-performance'
     });
+    
+    // Set clear color to transparent (important for camera feed to show!)
+    renderer.setClearColor(0x000000, 0); // Black with 0 alpha = transparent
     
     // Enable XR on the renderer (this is crucial!)
     renderer.xr.enabled = true;
