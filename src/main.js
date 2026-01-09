@@ -157,19 +157,34 @@ async function requestARSession() {
     
     debugLog(`XRWebGLLayer created. Antialias: ${xrLayer.antialias}, IgnoreDepthValues: ${xrLayer.ignoreDepthValues}`, 'info');
     debugLog(`XRWebGLLayer framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
-    debugLog(`XRWebGLLayer framebuffer object: ${xrLayer.framebuffer}`, 'info');
+    debugLog(`XRWebGLLayer framebuffer object: ${xrLayer.framebuffer}`, xrLayer.framebuffer ? 'success' : 'warning');
+    
+    if (!xrLayer.framebuffer) {
+      debugLog('⚠️ Framebuffer is null - this is normal on iOS WebXRViewer', 'warning');
+      debugLog('The camera feed should still work - XRWebGLLayer handles it', 'info');
+    }
 
     // Set canvas size to match the XR viewport
+    // Note: On iOS, the drawingBufferWidth/Height might be small initially
     canvas.width = gl.drawingBufferWidth;
     canvas.height = gl.drawingBufferHeight;
     debugLog(`Canvas resized to: ${canvas.width}x${canvas.height}`, 'info');
-    debugLog(`GL viewport should match: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
+    debugLog(`GL drawingBuffer: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
+    
+    // Try to get the actual render state to see the real dimensions
+    const renderState = xrSession.renderState;
+    if (renderState && renderState.baseLayer) {
+      debugLog(`BaseLayer framebuffer: ${renderState.baseLayer.framebufferWidth}x${renderState.baseLayer.framebufferHeight}`, 'info');
+    }
     
     // Verify canvas is visible
     const canvasStyle = window.getComputedStyle(canvas);
     debugLog(`Canvas display: ${canvasStyle.display}, visibility: ${canvasStyle.visibility}`, 'info');
     debugLog(`Canvas position: ${canvasStyle.position}, z-index: ${canvasStyle.zIndex}`, 'info');
     debugLog(`Canvas dimensions: ${canvas.offsetWidth}x${canvas.offsetHeight}`, 'info');
+    
+    // On iOS WebXRViewer, we might need to wait for the session to fully initialize
+    debugLog('Waiting for session to fully initialize...', 'info');
 
     // Get reference space for tracking
     debugLog('Requesting reference space...', 'info');
@@ -229,22 +244,37 @@ function onXRFrame(time, frame) {
     return;
   }
 
-  // IMPORTANT: Bind the XR layer's framebuffer to render to it
-  // This is required for the camera feed to display
-  if (xrLayer && xrLayer.framebuffer) {
-    gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer);
-    
-    // Set viewport to match the framebuffer size
-    gl.viewport(0, 0, xrLayer.framebufferWidth, xrLayer.framebufferHeight);
-    
-    if (frameCount === 1) {
-      debugLog(`Bound XR framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
-      debugLog(`Framebuffer object: ${xrLayer.framebuffer}`, 'info');
+  // IMPORTANT: On iOS WebXRViewer, the framebuffer might be null
+  // The camera feed should still work without explicitly binding it
+  // The XRWebGLLayer handles the camera feed automatically
+  
+  if (xrLayer) {
+    if (xrLayer.framebuffer) {
+      // Framebuffer is available - bind it (standard WebXR behavior)
+      gl.bindFramebuffer(gl.FRAMEBUFFER, xrLayer.framebuffer);
+      gl.viewport(0, 0, xrLayer.framebufferWidth, xrLayer.framebufferHeight);
+      
+      if (frameCount === 1) {
+        debugLog(`✅ Bound XR framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'success');
+      }
+    } else {
+      // Framebuffer is null (iOS WebXRViewer behavior)
+      // Don't bind anything - let the XRWebGLLayer handle rendering
+      // Bind to default framebuffer (0) instead
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      
+      // Set viewport to canvas size
+      gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+      
+      if (frameCount === 1) {
+        debugLog('⚠️ Framebuffer is null (iOS WebXRViewer) - using default framebuffer', 'warning');
+        debugLog(`Viewport set to: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
+        debugLog('Camera feed should be handled by XRWebGLLayer automatically', 'info');
+      }
     }
   } else {
     if (frameCount === 1) {
-      debugLog('⚠️ XR layer or framebuffer not available', 'warning');
-      debugLog(`xrLayer exists: ${!!xrLayer}, framebuffer exists: ${xrLayer ? !!xrLayer.framebuffer : 'N/A'}`, 'warning');
+      debugLog('❌ XR layer not available', 'error');
     }
   }
 
