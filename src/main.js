@@ -1,15 +1,5 @@
 // WebXR Gift Card - Main Entry Point
-// Step 3: WebXR Session Initialization
-// Step 4: Marker Image Registration
-// Step 5: Marker Detection and Tracking
-
-import { 
-  initializeMarkerTracking, 
-  getTrackableImage,
-  updateMarkerTracking,
-  onMarkerDetected,
-  isMarkerCurrentlyDetected
-} from './marker-tracker.js';
+// Simplified: Basic camera feed only (marker tracking removed for debugging)
 
 const canvas = document.getElementById('xr-canvas');
 let xrSession = null;
@@ -99,16 +89,6 @@ async function checkWebXRSupport() {
     return false;
   }
 
-  // Check if image tracking is available
-  const isImageTrackingSupported = 'ImageTracking' in window && 
-                                   'XRTrackedImageImage' in window;
-  
-  debugLog(`Image tracking available: ${isImageTrackingSupported}`, isImageTrackingSupported ? 'success' : 'warning');
-  
-  if (!isImageTrackingSupported) {
-    debugLog('Image tracking may not be supported - this feature is experimental', 'warning');
-  }
-
   return true;
 }
 
@@ -119,12 +99,11 @@ async function requestARSession() {
       throw new Error('WebXR not available');
     }
 
-    debugLog('Requesting AR session with image tracking...', 'info');
+    debugLog('Requesting AR session (basic camera feed only)...', 'info');
 
-    // Request immersive AR session with image-tracking feature
+    // Request immersive AR session - simplified, no image tracking
     const sessionInit = {
-      requiredFeatures: ['local'], // Required for AR
-      optionalFeatures: ['image-tracking'] // Image tracking (may not be available on all devices)
+      requiredFeatures: ['local'] // Required for AR
     };
 
     debugLog('Calling navigator.xr.requestSession...', 'info');
@@ -150,14 +129,19 @@ async function requestARSession() {
 
     // Make the WebGL context the base layer for the XR session
     debugLog('Creating XRWebGLLayer...', 'info');
+    const xrLayer = new XRWebGLLayer(xrSession, gl);
     await xrSession.updateRenderState({
-      baseLayer: new XRWebGLLayer(xrSession, gl)
+      baseLayer: xrLayer
     });
+    
+    debugLog(`XRWebGLLayer created. Antialias: ${xrLayer.antialias}, IgnoreDepthValues: ${xrLayer.ignoreDepthValues}`, 'info');
+    debugLog(`XRWebGLLayer framebuffer: ${xrLayer.framebufferWidth}x${xrLayer.framebufferHeight}`, 'info');
 
     // Set canvas size to match the XR viewport
     canvas.width = gl.drawingBufferWidth;
     canvas.height = gl.drawingBufferHeight;
     debugLog(`Canvas resized to: ${canvas.width}x${canvas.height}`, 'info');
+    debugLog(`GL viewport should match: ${gl.drawingBufferWidth}x${gl.drawingBufferHeight}`, 'info');
 
     // Get reference space for tracking
     debugLog('Requesting reference space...', 'info');
@@ -168,35 +152,12 @@ async function requestARSession() {
     // Handle session end
     xrSession.addEventListener('end', handleSessionEnd);
 
-    // Initialize marker tracking (Step 4)
-    try {
-      debugLog('Initializing marker tracking...', 'info');
-      const trackedImage = await initializeMarkerTracking(xrSession);
-      if (trackedImage) {
-        debugLog('✅ Marker tracking initialized', 'success');
-        
-        // Set up marker detection callback (Step 5)
-        onMarkerDetected((pose) => {
-          debugLog('🎯 Marker detected! Ready for animation!', 'success');
-          // Animation will be triggered here in Step 6
-        });
-      } else {
-        debugLog('ℹ️ Marker image loaded but tracking not available on this platform', 'warning');
-        debugLog('ℹ️ This is normal on Mac/Desktop - will work on Android Chrome', 'warning');
-      }
-    } catch (error) {
-      // Only show error if it's not a platform limitation
-      if (!error.message.includes('expected on Mac/Desktop')) {
-        debugLog(`⚠️ Marker tracking initialization failed: ${error.message}`, 'error');
-      }
-      // Continue anyway - we can still test the AR session
-    }
-
-    // Start the render loop (will be expanded in later steps)
-    debugLog('Starting render loop...', 'info');
+    // Start the render loop - just for camera feed
+    debugLog('Starting render loop for camera feed...', 'info');
     xrSession.requestAnimationFrame(onXRFrame);
 
-    debugLog('WebXR session initialized and ready', 'success');
+    debugLog('WebXR session initialized - camera feed should be visible', 'success');
+    debugLog('If you see black screen, the XRWebGLLayer may not be rendering', 'warning');
     return true;
 
   } catch (error) {
@@ -207,7 +168,7 @@ async function requestARSession() {
   }
 }
 
-// Handle XR frame - Step 5: Marker Detection
+// Handle XR frame - Simple camera feed only
 function onXRFrame(time, frame) {
   if (!xrSession || !referenceSpace) {
     if (frameCount === 0) {
@@ -221,11 +182,11 @@ function onXRFrame(time, frame) {
   // Update debug info periodically
   if (frameCount === 1) {
     debugLog('✅ Render loop running! Frame 1 processed', 'success');
+    debugLog('Camera feed should be visible now', 'info');
     updateDebugStatus();
   } else if (frameCount % 60 === 0) {
     // Update status every 60 frames (~1 second at 60fps)
     updateDebugStatus();
-    debugLog(`Frames processed: ${frameCount}`, 'info');
   }
 
   // Continue the render loop
@@ -242,36 +203,18 @@ function onXRFrame(time, frame) {
 
   // IMPORTANT: In WebXR immersive AR, the XRWebGLLayer automatically displays
   // the camera feed. We should NOT clear the canvas as it will hide the camera.
-  // Only clear if we're rendering custom content on top.
-  // For now, we'll skip clearing to see the camera feed.
-  // gl.clearColor(0, 0, 0, 0);
-  // gl.clear(gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT);
+  // The XRWebGLLayer handles rendering the camera feed automatically.
+  // Do NOT call gl.clear() here - it will hide the camera!
 
-  // Get the viewer pose for this frame
+  // Get the viewer pose for this frame (just to verify tracking is working)
   const viewerPose = frame.getViewerPose(referenceSpace);
   
   if (viewerPose) {
     // Session is active and tracking
     if (frameCount === 1) {
-      debugLog('✅ Viewer pose available - camera should be visible', 'success');
+      debugLog('✅ Viewer pose available - tracking active', 'success');
+      debugLog('If camera is black, check XRWebGLLayer setup', 'warning');
     }
-    
-    // Step 5: Update marker tracking - check if marker is detected
-    const markerPose = updateMarkerTracking(frame, referenceSpace);
-    
-    if (markerPose) {
-      // Marker is detected and we have its pose
-      // The pose contains:
-      // - markerPose.transform.position (x, y, z in meters)
-      // - markerPose.transform.orientation (quaternion)
-      // - markerPose.transform.matrix (4x4 transformation matrix)
-      
-      // This pose will be used in Step 6 to position the video/animation
-      // For now, we just log that it's detected
-      // (Logging every frame would be too verbose, so we only log on first detection)
-    }
-    
-    // In Step 6, we'll render the video/animation here using the markerPose
   } else {
     if (frameCount === 1) {
       debugLog('⚠️ Viewer pose not available on first frame', 'warning');
