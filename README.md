@@ -131,6 +131,27 @@ For best tracking results, your marker image should:
 - Check file format (JPG or PNG)
 - Check browser console for specific error
 
+**Git LFS / Vercel Deployment Issues:**
+If you see "Git LFS pointer file" errors in production:
+1. **Set up Git LFS token in Vercel:**
+   - Go to Vercel project settings → Environment Variables
+   - Add `GIT_LFS_TOKEN` with a GitHub Personal Access Token
+   - Token needs `repo` scope to access Git LFS files
+   - Redeploy after adding the token
+
+2. **Verify Git LFS tracking:**
+   ```bash
+   git lfs ls-files  # Should show marker-image.jpg
+   ```
+
+3. **Check Vercel build logs:**
+   - Look for Git LFS download messages
+   - Ensure files are downloaded before build completes
+
+4. **Alternative:** If Git LFS continues to cause issues, you can:
+   - Upload marker-image.jpg directly to Vercel's file system
+   - Or use a CDN/cloud storage and update the path in code
+
 **Marker not tracking:**
 - Ensure physical dimensions match printed size
 - Try a higher contrast image

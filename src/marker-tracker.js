@@ -29,11 +29,25 @@ async function loadMarkerImage() {
     // Fetch the image
     const response = await fetch(MARKER_CONFIG.imagePath);
     if (!response.ok) {
-      throw new Error(`Failed to load marker image: ${response.status} ${response.statusText}`);
+      throw new Error(`Failed to load marker image: ${response.status} ${response.statusText}. File may not exist or Git LFS file not downloaded.`);
     }
 
-    // Convert to blob then to ImageBitmap
+    // Convert to blob
     const blob = await response.blob();
+    
+    // Check if blob is suspiciously small (Git LFS pointer files are < 200 bytes)
+    // or if it's actually a text file (Git LFS pointer)
+    if (blob.size < 200) {
+      // Might be a Git LFS pointer - check by reading as text
+      const text = await blob.text();
+      if (text.startsWith('version https://git-lfs.github.com')) {
+        throw new Error('Marker image is a Git LFS pointer file, not the actual image. The file needs to be downloaded from Git LFS. Check Vercel build logs and ensure GIT_LFS_TOKEN is set in environment variables.');
+      }
+      // If it's small but not a pointer, might be corrupted - throw error
+      throw new Error(`Marker image file is too small (${blob.size} bytes). File may be corrupted or not properly downloaded from Git LFS.`);
+    }
+    
+    // Try to create ImageBitmap from the blob
     const imageBitmap = await createImageBitmap(blob);
     
     console.log('Marker image loaded successfully:', {
@@ -46,7 +60,20 @@ async function loadMarkerImage() {
 
   } catch (error) {
     console.error('Error loading marker image:', error);
-    throw new Error(`Could not load marker image: ${error.message}. Make sure marker-image.jpg exists in the public folder.`);
+    
+    // Provide helpful error message
+    let errorMessage = `Could not load marker image: ${error.message}`;
+    if (error.message.includes('Git LFS')) {
+      errorMessage += '\n\nGit LFS Setup Required:\n';
+      errorMessage += '1. Ensure GIT_LFS_TOKEN is set in Vercel environment variables\n';
+      errorMessage += '2. Check Vercel build logs for Git LFS download errors\n';
+      errorMessage += '3. Verify marker-image.jpg is properly tracked by Git LFS\n';
+      errorMessage += '4. The file should be in /public/marker-image.jpg';
+    } else {
+      errorMessage += '\n\nMake sure marker-image.jpg exists in the public folder.';
+    }
+    
+    throw new Error(errorMessage);
   }
 }
 
